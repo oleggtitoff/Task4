@@ -2,8 +2,9 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 
-#define SIGNAL_TIME 3	//seconds
+#define SIGNAL_TIME 3.0	//seconds
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
 #define BITS_PER_SAMPLE 16
@@ -78,6 +79,6 @@ void initializeFileHeader(WavHeader *header)
 	header->bitsPerSample = swap_uint16(16);
 	header->byterate = (SAMPLE_RATE * BITS_PER_SAMPLE * CHANNELS) / 8;
 	header->blockAlign = (BITS_PER_SAMPLE * CHANNELS) / 8;
-	//header->dataSize = //TODO
-	//header->fileSize = //TODO
+	header->dataSize = SAMPLE_RATE * SIGNAL_TIME;
+	header->fileSize = SAMPLE_RATE * SIGNAL_TIME + 44;
 }
