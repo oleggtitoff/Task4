@@ -1,9 +1,12 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
 
+#define OUTPUT_FILE_NAME "Output.wav"
+#define FILE_HEADER_SIZE 44
 #define SIGNAL_TIME 3.0	//seconds
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
@@ -27,27 +30,20 @@ typedef struct {
 } WavHeader;
 
 
-uint32_t swap_uint32(uint32_t number);
 void initializeFileHeader(WavHeader *header);
+
+FILE * openFile(char *fileName, _Bool mode);
+void writeHeader(WavHeader *headerBuff, FILE *outputFilePtr);
 
 
 int main()
 {
+	WavHeader header;
+	initializeFileHeader(&header);
+	FILE *outputFilePtr = openFile(OUTPUT_FILE_NAME, 1);
+	writeHeader(&header, outputFilePtr);
+
 	return 0;
-}
-
-uint16_t swap_uint16(uint16_t number)
-{
-	return ((number >> 8) & 0xff) |
-		((number << 8) & 0xff00);
-}
-
-uint32_t swap_uint32(uint32_t number)
-{
-	return ((number >> 24) & 0xff) |
-		((number << 8) & 0xff0000) |
-		((number >> 8) & 0xff00) |
-		((number << 24) & 0xff000000);
 }
 
 void initializeFileHeader(WavHeader *header)
@@ -72,13 +68,49 @@ void initializeFileHeader(WavHeader *header)
 	*(header->dataChunkHeader + 2) = 't';
 	*(header->dataChunkHeader + 3) = 'a';
 
-	header->formatDataLength = swap_uint32(16);
-	header->formatType = swap_uint16(1);
-	header->channels = swap_uint16(1);
-	header->sampleRate = swap_uint32(SAMPLE_RATE);
-	header->bitsPerSample = swap_uint16(16);
+	header->formatDataLength = 16;
+	header->formatType = 1;
+	header->channels = CHANNELS;
+	header->sampleRate = SAMPLE_RATE;
+	header->bitsPerSample = 16;
 	header->byterate = (SAMPLE_RATE * BITS_PER_SAMPLE * CHANNELS) / 8;
 	header->blockAlign = (BITS_PER_SAMPLE * CHANNELS) / 8;
-	header->dataSize = SAMPLE_RATE * SIGNAL_TIME;
-	header->fileSize = SAMPLE_RATE * SIGNAL_TIME + 44;
+	header->dataSize = (uint32_t)round(SAMPLE_RATE * SIGNAL_TIME);
+	header->fileSize = (uint32_t)round(SAMPLE_RATE * SIGNAL_TIME + 44);
+}
+
+FILE * openFile(char *fileName, _Bool mode)		//if 0 - read, if 1 - write
+{
+	FILE *filePtr;
+
+	if (mode == 0)
+	{
+		if ((filePtr = fopen(fileName, "rb")) == NULL)
+		{
+			printf("Error opening input file\n");
+			system("pause");
+			exit(0);
+		}
+	}
+	else
+	{
+		if ((filePtr = fopen(fileName, "wb")) == NULL)
+		{
+			printf("Error opening output file\n");
+			system("pause");
+			exit(0);
+		}
+	}
+
+	return filePtr;
+}
+
+void writeHeader(WavHeader *headerBuff, FILE *outputFilePtr)
+{
+	if (fwrite(headerBuff, FILE_HEADER_SIZE, 1, outputFilePtr) != 1)
+	{
+		printf("Error writing output file (header)\n");
+		system("pause");
+		exit(0);
+	}
 }
