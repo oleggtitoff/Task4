@@ -3,7 +3,10 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define SIGNAL_SIZE 128		//bytes
+#define SIGNAL_TIME 3	//seconds
+#define SAMPLE_RATE 48000
+#define CHANNELS 1
+#define BITS_PER_SAMPLE 16
 
 
 typedef struct {
@@ -30,6 +33,12 @@ void initializeFileHeader(WavHeader *header);
 int main()
 {
 	return 0;
+}
+
+uint16_t swap_uint16(uint16_t number)
+{
+	return ((number >> 8) & 0xff) |
+		((number << 8) & 0xff00);
 }
 
 uint32_t swap_uint32(uint32_t number)
@@ -62,13 +71,13 @@ void initializeFileHeader(WavHeader *header)
 	*(header->dataChunkHeader + 2) = 't';
 	*(header->dataChunkHeader + 3) = 'a';
 
-	header->formatDataLength = 0x10 << 24;
-	header->formatType = 0x1 << 8;
-	header->channels = 0x1 << 8;
-	header->sampleRate = 0x80BB << 16;
-	header->bitsPerSample = 0x10 << 8;
-	header->byterate = (header->sampleRate * header->bitsPerSample * header->channels) / 8;
-	header->blockAlign = (header->bitsPerSample * header->channels) / 8;
+	header->formatDataLength = swap_uint32(16);
+	header->formatType = swap_uint16(1);
+	header->channels = swap_uint16(1);
+	header->sampleRate = swap_uint32(SAMPLE_RATE);
+	header->bitsPerSample = swap_uint16(16);
+	header->byterate = (SAMPLE_RATE * BITS_PER_SAMPLE * CHANNELS) / 8;
+	header->blockAlign = (BITS_PER_SAMPLE * CHANNELS) / 8;
 	//header->dataSize = //TODO
 	//header->fileSize = //TODO
 }
