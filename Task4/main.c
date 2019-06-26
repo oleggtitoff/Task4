@@ -7,10 +7,18 @@
 
 #define OUTPUT_FILE_NAME "Output.wav"
 #define FILE_HEADER_SIZE 44
-#define SIGNAL_TIME 3.0	//seconds
+#define SIGNAL_TIME 0.5	//seconds
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
-#define BITS_PER_SAMPLE 16
+#define BYTES_PER_SAMPLE 2
+#define FREQUENCY 1000.0
+#define AMPLITUDE 30000
+
+#define PI 3.14159265358979323846
+#define FLOAT_MAX 3.402823466e+38F
+
+#define BITS_PER_SAMPLE ((BYTES_PER_SAMPLE) * 8)
+#define SAMPLES_NUM	((uint32_t)round((SAMPLE_RATE) * (SIGNAL_TIME)))
 
 
 typedef struct {
@@ -35,6 +43,7 @@ void initializeFileHeader(WavHeader *header);
 FILE * openFile(char *fileName, _Bool mode);
 void writeHeader(WavHeader *headerBuff, FILE *outputFilePtr);
 
+void generateToneSignal(FILE *outputFilePtr);
 
 int main()
 {
@@ -42,6 +51,7 @@ int main()
 	initializeFileHeader(&header);
 	FILE *outputFilePtr = openFile(OUTPUT_FILE_NAME, 1);
 	writeHeader(&header, outputFilePtr);
+	generateToneSignal(outputFilePtr);
 
 	return 0;
 }
@@ -75,8 +85,8 @@ void initializeFileHeader(WavHeader *header)
 	header->bitsPerSample = 16;
 	header->byterate = (SAMPLE_RATE * BITS_PER_SAMPLE * CHANNELS) / 8;
 	header->blockAlign = (BITS_PER_SAMPLE * CHANNELS) / 8;
-	header->dataSize = (uint32_t)round(SAMPLE_RATE * SIGNAL_TIME);
-	header->fileSize = (uint32_t)round(SAMPLE_RATE * SIGNAL_TIME + 44);
+	header->dataSize = SAMPLES_NUM;
+	header->fileSize = SAMPLES_NUM + FILE_HEADER_SIZE;
 }
 
 FILE * openFile(char *fileName, _Bool mode)		//if 0 - read, if 1 - write
@@ -112,5 +122,19 @@ void writeHeader(WavHeader *headerBuff, FILE *outputFilePtr)
 		printf("Error writing output file (header)\n");
 		system("pause");
 		exit(0);
+	}
+}
+
+void generateToneSignal(FILE *outputFilePtr)
+{
+	uint32_t i;
+	int16_t sample;
+	uint32_t timeCounter = 0;
+
+	for (i = 0; i < SAMPLES_NUM; i++)
+	{
+		sample = (int16_t)round(AMPLITUDE * sin(2 * PI * FREQUENCY * (double)timeCounter / (SAMPLE_RATE)));
+		fwrite(&sample, BYTES_PER_SAMPLE, 1, outputFilePtr);
+		timeCounter++;
 	}
 }
