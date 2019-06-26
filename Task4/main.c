@@ -22,6 +22,9 @@
 #define BITS_PER_SAMPLE ((BYTES_PER_SAMPLE) * 8)
 #define SAMPLES_NUM	((uint32_t)round((SAMPLE_RATE) * (SIGNAL_TIME)))
 
+char* optarg = NULL;
+int optind = 1;
+
 typedef struct {
 	uint8_t currNum;
 	int16_t samples[FILTER_COEFFICIENTS_NUM];
@@ -209,11 +212,43 @@ int main(int argc, char *argv[])
 	//generateToneSignal(buff);
 	generateSweepSignal(buff);
 	filterData(buff, &samplesBuff, coefsBuff);
+
 	fwrite(buff, BYTES_PER_SAMPLE, SAMPLES_NUM * CHANNELS, outputFilePtr);
 	fclose(outputFilePtr);
 
 	system("pause");
 	return 0;
+}
+
+int getopt(int argc, char *const argv[], const char *optstring)
+{
+	if ((optind >= argc) || (argv[optind][0] != '-') || (argv[optind][0] == 0))
+	{
+		return -1;
+	}
+
+	int opt = argv[optind][1];
+	const char *p = strchr(optstring, opt);
+
+	if (p == NULL)
+	{
+		return '?';
+	}
+
+	if (p[1] == ':')
+	{
+		optind++;
+
+		if (optind >= argc)
+		{
+			return '?';
+		}
+
+		optarg = argv[optind];
+		optind++;
+	}
+
+	return opt;
 }
 
 int16_t doubleToFixed15(double x)
