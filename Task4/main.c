@@ -13,7 +13,7 @@
 #define BYTES_PER_SAMPLE 2
 #define START_FREQUENCY 20.0			//TODO: from cmd
 #define STOP_FREQUENCY 22000.0			//TODO: from cmd
-#define AMPLITUDE 0.8
+#define AMPLITUDE 0.8					//TODO: from cmd
 #define FILTER_COEFFICIENTS_NUM 128
 
 #define PI 3.14159265358979323846
@@ -59,7 +59,9 @@ void generateNoiseSignal(int16_t *buff);
 int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff);
 void filterData(int16_t *buff, RingBuff *ringBuff, int32_t *coefsBuff);
 
-int main()
+int getopt(int argc, char *const argv[], const char *optstring);	//TODO
+
+int main(int argc, char *argv[])
 {
 	WavHeader header;
 	initializeFileHeader(&header);
