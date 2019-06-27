@@ -13,7 +13,6 @@
 #define BYTES_PER_SAMPLE 2
 #define BITS_PER_SAMPLE ((BYTES_PER_SAMPLE) * 8)
 #define FILTER_COEFFICIENTS_NUM 128
-#define DATA_BUFF_SIZE 100	// must be even
 
 #define DEFAULT_START_FREQUENCY 20.0
 #define DEFAULT_STOP_FREQUENCY 22000.0
@@ -85,12 +84,11 @@ void FileHeaderInitialization(WavHeader *header, Signal *signal);
 FILE * openFile(char *fileName, _Bool mode);
 void writeHeader(WavHeader *headerBuff, FILE *outputFilePtr);
 
-void generateToneSignal(int16_t *buff, uint32_t size, Signal *signal, uint32_t *timeCounter);
-void generateSweepSignal(int16_t *buff, uint32_t size, Signal *signal, uint32_t *timeCounter);
-void generateNoiseSignal(int16_t *buff, uint32_t size, Signal *signal);
+int16_t generateToneSignal(Signal *signal, uint32_t *timeCounter);
+int16_t generateSweepSignal(Signal *signal, uint32_t *timeCounter);
+int16_t generateNoiseSignal(Signal *signal);
 
 int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff);
-void filterData(int16_t *buff, uint32_t size, RingBuff *ringBuff, int32_t *coefsBuff);
 void run(Signal *signal, RingBuff *ringBuff, int32_t *coefsBuff, FILE *outputFilePtr);
 
 
@@ -269,7 +267,7 @@ int getopt(int argc, char *const argv[], const char *optstring)
 	{
 		optind++;
 
-		if (optind >= argc || argv[optind] == '-')
+		if (optind >= argc || (argv[optind][0] == '-' && (argv[optind][1] < 48 || argv[optind][1] > 57)))
 		{
 			printf("Option %s needs a value\n", argv[optind - 1]);
 			return ':';
@@ -498,47 +496,35 @@ void writeHeader(WavHeader *headerBuff, FILE *outputFilePtr)
 	}
 }
 
-void generateToneSignal(int16_t *buff, uint32_t size, Signal *signal, uint32_t *timeCounter)
+int16_t generateToneSignal(Signal *signal, uint32_t *timeCounter)
 {
-	uint32_t i;
+	int16_t res = doubleToFixed15(signal->amplitude * sin(2 * PI * signal->startFrequency * 
+		(double)*timeCounter / (SAMPLE_RATE)));
+	*timeCounter += 1;
 
-	for (i = 0; i < size; i += CHANNELS)
-	{
-		buff[i] = doubleToFixed15(signal->amplitude * sin(2 * PI * signal->startFrequency * 
-			(double)*timeCounter / (SAMPLE_RATE)));
-		buff[i + 1] = buff[i];
-		*timeCounter += 1;
-	}
+	return res;
 }
 
-void generateSweepSignal(int16_t *buff, uint32_t size, Signal *signal, uint32_t *timeCounter)
+int16_t generateSweepSignal(Signal *signal, uint32_t *timeCounter)
 {
-	uint32_t i;
 	double Omega1 = 2 * PI * signal->startFrequency;
 	double Omega2 = 2 * PI * signal->stopFrequency;
 	double log1 = log(Omega2 / Omega1);
 	double t1;
 	double exp1;
+	int16_t res;
 
-	for (i = 0; i < size; i += CHANNELS)
-	{
-		t1 = (double)*timeCounter / signal->samplesNum;
-		exp1 = exp(t1 * log1) - 1;
-		buff[i] = doubleToFixed15(signal->amplitude * sin(Omega1 * signal->samplesNum * exp1 / (SAMPLE_RATE * log1)));
-		buff[i + 1] = buff[i];
-		*timeCounter += 1;
-	}
+	t1 = (double)*timeCounter / signal->samplesNum;
+	exp1 = exp(t1 * log1) - 1;
+	res = doubleToFixed15(signal->amplitude * sin(Omega1 * signal->samplesNum * exp1 / (SAMPLE_RATE * log1)));
+	*timeCounter += 1;
+
+	return res;
 }
 
-void generateNoiseSignal(int16_t *buff, uint32_t size, Signal *signal)
+int16_t generateNoiseSignal(Signal *signal)
 {
-	uint32_t i;
-
-	for (i = 0; i < size; i += CHANNELS)
-	{
-		buff[i] = doubleToFixed15(signal->amplitude * ((double)rand() / RAND_MAX * 2.0 - 1.0));
-		buff[i + 1] = buff[i];
-	}
+	return doubleToFixed15(signal->amplitude * ((double)rand() / RAND_MAX * 2.0 - 1.0));
 }
 
 int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff)
@@ -560,62 +546,37 @@ int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff)
 	return (int16_t)((accum + (1LL << 30)) >> 31);
 }
 
-void filterData(int16_t *buff, uint32_t size, RingBuff *ringBuff, int32_t *coefsBuff)
-{
-	uint32_t i;
-
-	for (i = 0; i < size; i += CHANNELS)
-	{
-		ringBuff->samples[ringBuff->currNum] = buff[i];
-		buff[i] = firFilter(ringBuff, coefsBuff);
-	}
-}
 
 void run(Signal *signal, RingBuff *ringBuff, int32_t *coefsBuff, FILE *outputFilePtr)
 {
 	uint32_t i;
 	uint32_t timeCounter = 0;
-	int16_t buff[DATA_BUFF_SIZE];
-	uint16_t remains;
+	int16_t *buff = malloc(sizeof(int16_t) * signal->samplesNum * CHANNELS);
 	
-	for (i = 0; i < (signal->samplesNum * CHANNELS) / DATA_BUFF_SIZE; i++)
+	for (i = 0; i < signal->samplesNum * CHANNELS; i += CHANNELS)
 	{
 		switch (signal->signalType)
 		{
 		case 1:
-			generateToneSignal(buff, DATA_BUFF_SIZE, signal, &timeCounter);
+			buff[i] = generateToneSignal(signal, &timeCounter);
+			buff[i + 1] = buff[i];
 			break;
 		case 2:
-			generateSweepSignal(buff, DATA_BUFF_SIZE, signal, &timeCounter);
+			buff[i] = generateSweepSignal(signal, &timeCounter);
+			buff[i + 1] = buff[i];
 			break;
 		case 3:
-			generateNoiseSignal(buff, DATA_BUFF_SIZE, signal);
+			buff[i] = generateNoiseSignal(signal);
+			buff[i + 1] = buff[i];
 			break;
 		default:
 			printf("Wrong signal type specified\n");
 			return;
 		}
 
-		filterData(buff, DATA_BUFF_SIZE, ringBuff, coefsBuff);
-		fwrite(buff, BYTES_PER_SAMPLE, DATA_BUFF_SIZE, outputFilePtr);
+		ringBuff->samples[ringBuff->currNum] = buff[i + 1];
+		buff[i + 1] = firFilter(ringBuff, coefsBuff);
 	}
 
-	if ((remains = (signal->samplesNum * CHANNELS) % DATA_BUFF_SIZE) != 0)
-	{
-		switch (signal->signalType)
-		{
-		case 1:
-			generateToneSignal(buff, remains, signal, &timeCounter);
-			break;
-		case 2:
-			generateSweepSignal(buff, remains, signal, &timeCounter);
-			break;
-		case 3:
-			generateNoiseSignal(buff, remains, signal);
-			break;
-		}
-
-		filterData(buff, remains, ringBuff, coefsBuff);
-		fwrite(buff, BYTES_PER_SAMPLE, remains, outputFilePtr);
-	}
+	fwrite(buff, BYTES_PER_SAMPLE, signal->samplesNum * CHANNELS, outputFilePtr);
 }
