@@ -15,9 +15,9 @@
 #define FILTER_COEFFICIENTS_NUM 128
 #define DATA_BUFF_SIZE 100	// must be even
 
-#define DEFAULT_START_FREQUENCY 1000.0
+#define DEFAULT_START_FREQUENCY 20.0
 #define DEFAULT_STOP_FREQUENCY 22000.0
-#define DEFAULT_AMPLITUDE 1.0
+#define DEFAULT_AMPLITUDE 0.0
 #define DEFAULT_SIGNAL_TIME 2.0
 
 #define PI 3.14159265358979323846
@@ -37,6 +37,7 @@
 
 char* optarg = NULL;
 int optind = 1;
+
 
 typedef struct {
 	uint8_t currNum;
@@ -72,8 +73,10 @@ typedef struct {
 int getopt(int argc, char *const argv[], const char *optstring);
 void runGetopt(int argc, char *const argv[], const char *optstring, Signal *signal);
 
+double dBtoGain(double dB);
 int16_t doubleToFixed15(double x);
 int32_t doubleToFixed32(double x);
+void correctCoefficients(double *coeficients);
 void coefsDoubleToFixed32(double *input, int32_t *output);
 void ringInitialization(RingBuff *buff);
 void signalInitialization(Signal *signal);
@@ -235,7 +238,8 @@ int main(int argc, char *argv[])
 	};
 	int32_t coefsBuff[FILTER_COEFFICIENTS_NUM];
 	RingBuff samplesBuff;
-
+	
+	correctCoefficients(coefsDoubleBuff);
 	coefsDoubleToFixed32(coefsDoubleBuff, coefsBuff);
 	ringInitialization(&samplesBuff);
 	run(&signal, &samplesBuff, coefsBuff, outputFilePtr);
@@ -253,7 +257,7 @@ int getopt(int argc, char *const argv[], const char *optstring)
 	}
 
 	int opt = argv[optind][1];
-	const char *p = strchr(optstring, opt);
+	const int8_t *p = strchr(optstring, opt);
 
 	if (p == NULL)
 	{
@@ -272,10 +276,8 @@ int getopt(int argc, char *const argv[], const char *optstring)
 		}
 
 		optarg = argv[optind];
-		
 	}
-	printf("opt = %c\n", opt);
-	printf("optind = %d\n", optind);
+
 	optind++;
 	return opt;
 }
@@ -318,13 +320,13 @@ void runGetopt(int argc, char *const argv[], const char *optstring, Signal *sign
 			}
 			break;
 		case 'a':
-			if (atof(optarg) < 0 || atof(optarg) > 1)
+			if (atof(optarg) > 0)
 			{
 				printf("Wrong amplitude value specified, it will be %f\n", DEFAULT_AMPLITUDE);
 			}
 			else
 			{
-				signal->amplitude = atof(optarg);
+				signal->amplitude = dBtoGain(atof(optarg));
 			}
 			break;
 		case 'd':
@@ -337,8 +339,15 @@ void runGetopt(int argc, char *const argv[], const char *optstring, Signal *sign
 				signal->signalTime = atof(optarg);
 			}
 			break;
+		default:
+			exit(0);
 		}
 	}
+}
+
+double dBtoGain(double dB)
+{
+	return powf(10, dB / 20.0f);
 }
 
 int16_t doubleToFixed15(double x)
@@ -369,6 +378,25 @@ int32_t doubleToFixed32(double x)
 	return (int32_t)(x * (double)(1LL << 31));
 }
 
+void correctCoefficients(double *coeficients)
+{
+	uint16_t i;
+	double sum = 0;
+
+	for (i = 0; i < FILTER_COEFFICIENTS_NUM; i++)
+	{
+		sum += coeficients[i];
+	}
+
+	if (sum != 1)
+	{
+		for (i = 0; i < FILTER_COEFFICIENTS_NUM; i++)
+		{
+			coeficients[i] *= (2 - sum);
+		}
+	}
+}
+
 void coefsDoubleToFixed32(double *input, int32_t *output)
 {
 	int16_t i;
@@ -396,7 +424,7 @@ void signalInitialization(Signal *signal)
 	signal->signalType = 0;
 	signal->startFrequency = DEFAULT_START_FREQUENCY;
 	signal->stopFrequency = DEFAULT_STOP_FREQUENCY;
-	signal->amplitude = DEFAULT_AMPLITUDE;
+	signal->amplitude = dBtoGain(DEFAULT_AMPLITUDE);
 	signal->signalTime = DEFAULT_SIGNAL_TIME;
 	signal->samplesNum = (uint32_t)round(signal->signalTime * SAMPLE_RATE);
 }
