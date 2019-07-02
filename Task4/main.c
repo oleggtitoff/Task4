@@ -551,7 +551,7 @@ void run(Signal *signal, RingBuff *ringBuff, int32_t *coefsBuff, FILE *outputFil
 {
 	uint32_t i;
 	uint32_t timeCounter = 0;
-	int16_t *buff = malloc(sizeof(int16_t) * signal->samplesNum * CHANNELS);
+	int16_t *buff = malloc(BITS_PER_SAMPLE * signal->samplesNum * CHANNELS);
 	
 	for (i = 0; i < signal->samplesNum * CHANNELS; i += CHANNELS)
 	{
