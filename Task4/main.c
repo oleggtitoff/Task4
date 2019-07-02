@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
+#include <string.h>
 
 #define OUTPUT_FILE_NAME "Output.wav"
 
@@ -12,6 +13,7 @@
 #define CHANNELS 2
 #define BYTES_PER_SAMPLE 2
 #define BITS_PER_SAMPLE ((BYTES_PER_SAMPLE) * 8)
+#define DATA_BUFF_SIZE 1000
 #define FILTER_COEFFICIENTS_NUM 128
 
 #define DEFAULT_START_FREQUENCY 20.0
@@ -31,7 +33,7 @@
 // f - frequency/start frequency
 // e - stop frequency
 // a - amplitude
-// d - signal time (duration)
+// d - signal time (duration in seconds)
 
 
 char* optarg = NULL;
@@ -243,7 +245,6 @@ int main(int argc, char *argv[])
 	run(&signal, &samplesBuff, coefsBuff, outputFilePtr);
 	fclose(outputFilePtr);
 
-	system("pause");
 	return 0;
 }
 
@@ -345,7 +346,7 @@ void runGetopt(int argc, char *const argv[], const char *optstring, Signal *sign
 
 double dBtoGain(double dB)
 {
-	return powf(10, dB / 20.0f);
+	return pow(10, dB / 20.0);
 }
 
 int16_t doubleToFixed15(double x)
@@ -550,33 +551,51 @@ int16_t firFilter(RingBuff *ringBuff, int32_t *coefsBuff)
 void run(Signal *signal, RingBuff *ringBuff, int32_t *coefsBuff, FILE *outputFilePtr)
 {
 	uint32_t i;
+	uint32_t samples;
+	uint32_t counter = signal->samplesNum * CHANNELS;
 	uint32_t timeCounter = 0;
-	int16_t *buff = malloc(BITS_PER_SAMPLE * signal->samplesNum * CHANNELS);
-	
-	for (i = 0; i < signal->samplesNum * CHANNELS; i += CHANNELS)
+	int16_t *buff = malloc(BITS_PER_SAMPLE * DATA_BUFF_SIZE);
+
+	while (counter > 0)
 	{
-		switch (signal->signalType)
+		if (counter >= DATA_BUFF_SIZE)
 		{
-		case 1:
-			buff[i] = generateToneSignal(signal, &timeCounter);
-			buff[i + 1] = buff[i];
-			break;
-		case 2:
-			buff[i] = generateSweepSignal(signal, &timeCounter);
-			buff[i + 1] = buff[i];
-			break;
-		case 3:
-			buff[i] = generateNoiseSignal(signal);
-			buff[i + 1] = buff[i];
-			break;
-		default:
-			printf("Wrong signal type specified\n");
-			return;
+			samples = DATA_BUFF_SIZE;
+			counter -= DATA_BUFF_SIZE;
+		}
+		else
+		{
+			samples = counter;
+			counter = 0;
+		}
+		
+		for (i = 0; i <= samples - CHANNELS; i += CHANNELS)
+		{
+			switch (signal->signalType)
+			{
+			case 1:
+				buff[i] = generateToneSignal(signal, &timeCounter);
+				buff[i + 1] = buff[i];
+				break;
+			case 2:
+				buff[i] = generateSweepSignal(signal, &timeCounter);
+				buff[i + 1] = buff[i];
+				break;
+			case 3:
+				buff[i] = generateNoiseSignal(signal);
+				buff[i + 1] = buff[i];
+				break;
+			default:
+				printf("Wrong signal type specified\n");
+				return;
+			}
+
+			ringBuff->samples[ringBuff->currNum] = buff[i + 1];
+			buff[i + 1] = firFilter(ringBuff, coefsBuff);
 		}
 
-		ringBuff->samples[ringBuff->currNum] = buff[i + 1];
-		buff[i + 1] = firFilter(ringBuff, coefsBuff);
+		fwrite(buff, BYTES_PER_SAMPLE, samples, outputFilePtr);
 	}
 
-	fwrite(buff, BYTES_PER_SAMPLE, signal->samplesNum * CHANNELS, outputFilePtr);
+	free(buff);
 }
